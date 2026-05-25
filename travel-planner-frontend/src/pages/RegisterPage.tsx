@@ -1,14 +1,14 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { authService } from "../services/AuthService";
-import { useAuth } from "../context/AuthContext";
 
-const LoginPage = () => {
+const RegisterPage = () => {
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -16,15 +16,10 @@ const LoginPage = () => {
     setError("");
     setLoading(true);
     try {
-      const response = await authService.login({ email, password });
-      const token = response.token;
-      const payload = JSON.parse(atob(token.split(".")[1]));
-      const userId = payload["http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier"];
-      const user = await authService.getUserById(Number(userId), token);
-      login(token, user);
-      navigate("/dashboard");
+      await authService.register({ firstName, lastName, email, password });
+      navigate("/login");
     } catch {
-      setError("Pogrešan email ili lozinka.");
+      setError("Greška prilikom registracije. Pokušajte ponovo.");
     } finally {
       setLoading(false);
     }
@@ -49,9 +44,9 @@ const LoginPage = () => {
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <span style={{ fontSize: 48 }}>✈️</span>
           <h2 style={{ fontSize: 24, fontWeight: 700, color: "#2d3748", marginTop: 8 }}>
-            TravelPlanner
+            Kreirajte nalog
           </h2>
-          <p style={{ color: "#718096", marginTop: 4 }}>Prijavite se na vaš nalog</p>
+          <p style={{ color: "#718096", marginTop: 4 }}>Počnite planirati vaša putovanja</p>
         </div>
 
         {error && (
@@ -64,10 +59,38 @@ const LoginPage = () => {
         )}
 
         <form onSubmit={handleSubmit}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+            <div>
+              <label style={{ display: "block", marginBottom: 6, fontWeight: 600, color: "#4a5568", fontSize: 14 }}>Ime</label>
+              <input
+                type="text"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                required
+                placeholder="Ime"
+                style={{
+                  width: "100%", padding: "12px 16px", borderRadius: 8,
+                  border: "2px solid #e2e8f0", fontSize: 15, boxSizing: "border-box"
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", marginBottom: 6, fontWeight: 600, color: "#4a5568", fontSize: 14 }}>Prezime</label>
+              <input
+                type="text"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                required
+                placeholder="Prezime"
+                style={{
+                  width: "100%", padding: "12px 16px", borderRadius: 8,
+                  border: "2px solid #e2e8f0", fontSize: 15, boxSizing: "border-box"
+                }}
+              />
+            </div>
+          </div>
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: "block", marginBottom: 6, fontWeight: 600, color: "#4a5568", fontSize: 14 }}>
-              Email adresa
-            </label>
+            <label style={{ display: "block", marginBottom: 6, fontWeight: 600, color: "#4a5568", fontSize: 14 }}>Email adresa</label>
             <input
               type="email"
               value={email}
@@ -76,15 +99,12 @@ const LoginPage = () => {
               placeholder="vas@email.com"
               style={{
                 width: "100%", padding: "12px 16px", borderRadius: 8,
-                border: "2px solid #e2e8f0", fontSize: 15, outline: "none",
-                transition: "border-color 0.2s", boxSizing: "border-box"
+                border: "2px solid #e2e8f0", fontSize: 15, boxSizing: "border-box"
               }}
             />
           </div>
           <div style={{ marginBottom: 24 }}>
-            <label style={{ display: "block", marginBottom: 6, fontWeight: 600, color: "#4a5568", fontSize: 14 }}>
-              Lozinka
-            </label>
+            <label style={{ display: "block", marginBottom: 6, fontWeight: 600, color: "#4a5568", fontSize: 14 }}>Lozinka</label>
             <input
               type="password"
               value={password}
@@ -93,8 +113,7 @@ const LoginPage = () => {
               placeholder="••••••••"
               style={{
                 width: "100%", padding: "12px 16px", borderRadius: 8,
-                border: "2px solid #e2e8f0", fontSize: 15, outline: "none",
-                boxSizing: "border-box"
+                border: "2px solid #e2e8f0", fontSize: 15, boxSizing: "border-box"
               }}
             />
           </div>
@@ -109,14 +128,14 @@ const LoginPage = () => {
               opacity: loading ? 0.7 : 1,
             }}
           >
-            {loading ? "Prijava..." : "Prijavi se"}
+            {loading ? "Registracija..." : "Registruj se"}
           </button>
         </form>
 
         <p style={{ textAlign: "center", marginTop: 24, color: "#718096", fontSize: 14 }}>
-          Nemate nalog?{" "}
-          <Link to="/register" style={{ color: "#4f8ef7", fontWeight: 600, textDecoration: "none" }}>
-            Registrujte se
+          Već imate nalog?{" "}
+          <Link to="/login" style={{ color: "#4f8ef7", fontWeight: 600, textDecoration: "none" }}>
+            Prijavite se
           </Link>
         </p>
       </div>
@@ -124,4 +143,4 @@ const LoginPage = () => {
   );
 };
 
-export default LoginPage;
+export default RegisterPage;
