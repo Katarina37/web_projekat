@@ -8,6 +8,7 @@ import type { Destination, CreateDestinationDto } from "../models/Destination";
 import type { Activity, CreateActivityDto } from "../models/Activity";
 import type { ChecklistItem } from "../models/ChecklistItem";
 import type { Expense, CreateExpenseDto } from "../models/Expense";
+import { generateTravelPlanPdf } from "../services/PdfService";
 
 const TravelPlanDetailPage = () => {
   const { id } = useParams();
@@ -37,8 +38,12 @@ const TravelPlanDetailPage = () => {
   });
   const [editingActId, setEditingActId] = useState<number | null>(null);
   const [editActForm, setEditActForm] = useState<CreateActivityDto>({
-  name: "", activityDate: "", activityTime: "", location: "", description: "", estimatedCost: 0, status: "planned"
-});
+    name: "", activityDate: "", activityTime: "", location: "", description: "", estimatedCost: 0, status: "planned"
+  });
+
+  // Calendar view state
+  const [activityView, setActivityView] = useState<"list" | "calendar">("list");
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date());
 
   useEffect(() => {
     const fetchData = async () => {
@@ -78,6 +83,84 @@ const TravelPlanDetailPage = () => {
     { key: "expenses", label: "💰 Troškovi" },
   ];
 
+  // ---------- Calendar helpers ----------
+  const getDaysInMonth = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    return { firstDay: (firstDay + 6) % 7, daysInMonth }; // ponedjeljak = 0
+  };
+
+  const getActivitiesForDay = (day: number) => {
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth();
+    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    return activities.filter(a => a.activityDate.startsWith(dateStr));
+  };
+
+  // ---------- Activity card (reused in list view) ----------
+  const ActivityCard = ({ a }: { a: Activity }) => (
+    <div style={{
+      background: "white", borderRadius: 12, padding: "16px 20px",
+      boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+      display: "flex", justifyContent: "space-between", alignItems: "center"
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <div style={{
+          width: 4, height: 48, borderRadius: 4,
+          background: statusColors[a.status] || "#4f8ef7"
+        }} />
+        <div>
+          <h4 style={{ color: "#2d3748", fontWeight: 600 }}>{a.name}</h4>
+          <p style={{ fontSize: 13, color: "#718096" }}>
+            📅 {formatDate(a.activityDate)} {a.activityTime && `• ⏰ ${a.activityTime}`}
+            {a.location && ` • 📍 ${a.location}`}
+          </p>
+          {a.description && (
+            <p style={{ fontSize: 13, color: "#4a5568", marginTop: 4 }}>📝 {a.description}</p>
+          )}
+        </div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <span style={{
+          background: statusColors[a.status] + "20",
+          color: statusColors[a.status],
+          padding: "4px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600
+        }}>
+          {statusLabels[a.status]}
+        </span>
+        <span style={{ fontWeight: 700, color: "#276749" }}>{a.estimatedCost} €</span>
+        <button onClick={() => {
+          setEditingActId(a.id);
+          setEditActForm({
+            name: a.name,
+            activityDate: a.activityDate.split("T")[0],
+            activityTime: a.activityTime ? a.activityTime.substring(0, 5) : "",
+            location: a.location || "",
+            description: a.description || "",
+            estimatedCost: a.estimatedCost,
+            status: a.status
+          });
+        }} style={{
+          background: "#edf2f7", color: "#4a5568", border: "none",
+          borderRadius: 6, padding: "6px 12px", fontSize: 13, cursor: "pointer"
+        }}>
+          ✏️
+        </button>
+        <button onClick={async () => {
+          await travelService.deleteActivity(a.id, token!);
+          setActivities(activities.filter((x) => x.id !== a.id));
+        }} style={{
+          background: "#fff5f5", color: "#c53030", border: "none",
+          borderRadius: 6, padding: "6px 12px", fontSize: 13, cursor: "pointer"
+        }}>
+          🗑️
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div style={{ padding: "32px", maxWidth: 1000, margin: "0 auto" }}>
       <button
@@ -115,6 +198,16 @@ const TravelPlanDetailPage = () => {
                 }}
               >
                 ✏️ Uredi
+              </button>
+              <button
+                onClick={() => generateTravelPlanPdf(plan, destinations, activities, checklistItems, expenses)}
+                style={{
+                  background: "rgba(255,255,255,0.2)", border: "1px solid rgba(255,255,255,0.4)",
+                  color: "white", padding: "10px 20px", borderRadius: 8,
+                  fontSize: 14, fontWeight: 600, cursor: "pointer"
+                }}
+              >
+                📄 Izvoz PDF
               </button>
             </div>
 
@@ -162,7 +255,7 @@ const TravelPlanDetailPage = () => {
             ))}
           </div>
 
-          {/* Destinations Tab */}
+          {/* ───────────── Destinations Tab ───────────── */}
           {activeTab === "destinations" && (
             <div>
               <div style={{
@@ -282,9 +375,10 @@ const TravelPlanDetailPage = () => {
             </div>
           )}
 
-          {/* Activities Tab */}
+          {/* ───────────── Activities Tab ───────────── */}
           {activeTab === "activities" && (
             <div>
+              {/* Add Activity Form */}
               <div style={{
                 background: "white", borderRadius: 16, padding: 24,
                 boxShadow: "0 2px 12px rgba(0,0,0,0.06)", marginBottom: 24
@@ -329,123 +423,292 @@ const TravelPlanDetailPage = () => {
                   </button>
                 </form>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {activities.map((a) => (
-                  <div key={a.id} style={{
-                    background: "white", borderRadius: 12, padding: "16px 20px",
-                    boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
-                    display: "flex", justifyContent: "space-between", alignItems: "center"
-                  }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                      <div style={{
-                        width: 4, height: 48, borderRadius: 4,
-                        background: statusColors[a.status] || "#4f8ef7"
-                      }} />
-                      <div>
-                        <h4 style={{ color: "#2d3748", fontWeight: 600 }}>{a.name}</h4>
-                        <p style={{ fontSize: 13, color: "#718096" }}>
-                          📅 {formatDate(a.activityDate)} {a.activityTime && `• ⏰ ${a.activityTime}`}
-                          {a.location && ` • 📍 ${a.location}`}
-                        </p>
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <span style={{
-                        background: statusColors[a.status] + "20",
-                        color: statusColors[a.status],
-                        padding: "4px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600
-                      }}>
-                        {statusLabels[a.status]}
-                      </span>
-                      <span style={{ fontWeight: 700, color: "#276749" }}>{a.estimatedCost} €</span>
-                      <button onClick={() => {
-                        setEditingActId(a.id);
-                        setEditActForm({
-                          name: a.name,
-                          activityDate: a.activityDate.split("T")[0],
-                          activityTime: a.activityTime ? a.activityTime.substring(0, 5) : "",
-                          location: a.location || "",
-                          description: a.description || "",
-                          estimatedCost: a.estimatedCost,
-                          status: a.status
-                        });
-                      }} style={{
-                        background: "#edf2f7", color: "#4a5568", border: "none",
-                        borderRadius: 6, padding: "6px 12px", fontSize: 13, cursor: "pointer"
-                      }}>
-                        ✏️
-                      </button>
-                       <button onClick={async () => {
-                          await travelService.deleteActivity(a.id, token!);
-                          setActivities(activities.filter((x) => x.id !== a.id));
-                        }} style={{
-                          background: "#fff5f5", color: "#c53030", border: "none",
-                          borderRadius: 6, padding: "6px 12px", fontSize: 13, cursor: "pointer"
-                        }}>
-                          🗑️
-                      </button>
-                    </div>
+
+              {/* List / Calendar toggle */}
+              <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+                <button
+                  onClick={() => setActivityView("list")}
+                  style={{
+                    padding: "8px 20px", borderRadius: 8, border: "none",
+                    fontWeight: 600, fontSize: 13, cursor: "pointer",
+                    background: activityView === "list"
+                      ? "linear-gradient(135deg, #4f8ef7 0%, #38b2ac 100%)"
+                      : "#edf2f7",
+                    color: activityView === "list" ? "white" : "#718096",
+                    transition: "all 0.2s"
+                  }}
+                >
+                  ☰ Lista
+                </button>
+                <button
+                  onClick={() => setActivityView("calendar")}
+                  style={{
+                    padding: "8px 20px", borderRadius: 8, border: "none",
+                    fontWeight: 600, fontSize: 13, cursor: "pointer",
+                    background: activityView === "calendar"
+                      ? "linear-gradient(135deg, #4f8ef7 0%, #38b2ac 100%)"
+                      : "#edf2f7",
+                    color: activityView === "calendar" ? "white" : "#718096",
+                    transition: "all 0.2s"
+                  }}
+                >
+                  📅 Kalendar
+                </button>
+              </div>
+
+              {/* ── CALENDAR VIEW ── */}
+              {activityView === "calendar" && (
+                <div style={{
+                  background: "white", borderRadius: 16, padding: 24,
+                  boxShadow: "0 2px 12px rgba(0,0,0,0.06)"
+                }}>
+                  {/* Month navigation */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                    <button
+                      onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1))}
+                      style={{
+                        background: "#edf2f7", border: "none", borderRadius: 8,
+                        padding: "8px 16px", cursor: "pointer", fontSize: 18, lineHeight: 1
+                      }}
+                    >
+                      ‹
+                    </button>
+                    <h3 style={{ color: "#2d3748", fontWeight: 700, fontSize: 18, textTransform: "capitalize" }}>
+                      {calendarMonth.toLocaleDateString("sr-RS", { month: "long", year: "numeric" })}
+                    </h3>
+                    <button
+                      onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1))}
+                      style={{
+                        background: "#edf2f7", border: "none", borderRadius: 8,
+                        padding: "8px 16px", cursor: "pointer", fontSize: 18, lineHeight: 1
+                      }}
+                    >
+                      ›
+                    </button>
                   </div>
-                ))}
-                {editingActId && (
-                  <div style={{
-                    position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-                    background: "rgba(0,0,0,0.5)", display: "flex",
-                    alignItems: "center", justifyContent: "center", zIndex: 1000
-                  }}>
+
+                  {/* Day-of-week headers */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginBottom: 4 }}>
+                    {["Pon", "Uto", "Sri", "Čet", "Pet", "Sub", "Ned"].map((d) => (
+                      <div key={d} style={{
+                        textAlign: "center", fontSize: 12, fontWeight: 700,
+                        color: "#718096", padding: "6px 0"
+                      }}>
+                        {d}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Calendar grid */}
+                  {(() => {
+                    const { firstDay, daysInMonth } = getDaysInMonth(calendarMonth);
+                    const today = new Date();
+                    const cells: React.ReactNode[] = [];
+
+                    // Empty cells before first day
+                    for (let i = 0; i < firstDay; i++) {
+                      cells.push(<div key={`empty-${i}`} style={{ minHeight: 80 }} />);
+                    }
+
+                    for (let day = 1; day <= daysInMonth; day++) {
+                      const dayActivities = getActivitiesForDay(day);
+                      const isToday =
+                        today.getDate() === day &&
+                        today.getMonth() === calendarMonth.getMonth() &&
+                        today.getFullYear() === calendarMonth.getFullYear();
+
+                      cells.push(
+                        <div key={day} style={{
+                          minHeight: 80,
+                          border: `1px solid ${isToday ? "#4f8ef7" : "#e2e8f0"}`,
+                          borderRadius: 8,
+                          padding: "6px 8px",
+                          background: isToday ? "#ebf8ff" : "white",
+                        }}>
+                          <div style={{
+                            fontSize: 13,
+                            fontWeight: isToday ? 700 : 500,
+                            color: isToday ? "#4f8ef7" : "#4a5568",
+                            marginBottom: 4
+                          }}>
+                            {day}
+                          </div>
+                          {dayActivities
+                            .sort((a, b) => (a.activityTime || "").localeCompare(b.activityTime || ""))
+                            .map((a) => (
+                              <div
+                                key={a.id}
+                                title={`${a.name}${a.location ? ` • ${a.location}` : ""}${a.estimatedCost ? ` • ${a.estimatedCost} €` : ""}`}
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: 600,
+                                  background: statusColors[a.status] + "22",
+                                  color: statusColors[a.status],
+                                  borderLeft: `3px solid ${statusColors[a.status]}`,
+                                  borderRadius: "0 4px 4px 0",
+                                  padding: "2px 5px",
+                                  marginBottom: 2,
+                                  whiteSpace: "nowrap",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  cursor: "default"
+                                }}
+                              >
+                                {a.activityTime ? a.activityTime.substring(0, 5) + " " : ""}
+                                {a.name}
+                              </div>
+                            ))}
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
+                        {cells}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Legend */}
+                  <div style={{ display: "flex", gap: 16, marginTop: 16, flexWrap: "wrap" }}>
+                    {Object.entries(statusLabels).map(([key, label]) => (
+                      <div key={key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12 }}>
+                        <div style={{
+                          width: 12, height: 12, borderRadius: 2,
+                          background: statusColors[key],
+                          opacity: 0.8
+                        }} />
+                        <span style={{ color: "#718096" }}>{label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ── LIST VIEW (grouped by date) ── */}
+              {activityView === "list" && (
+                <div>
+                  {activities.length === 0 ? (
+                    <div style={{
+                      background: "white", borderRadius: 12, padding: 40,
+                      textAlign: "center", color: "#a0aec0",
+                      boxShadow: "0 2px 12px rgba(0,0,0,0.06)"
+                    }}>
+                      Nema aktivnosti. Dodaj prvu aktivnost iznad.
+                    </div>
+                  ) : (
+                    (() => {
+                      // Group by date
+                      const grouped: Record<string, Activity[]> = {};
+                      [...activities]
+                        .sort((a, b) => a.activityDate.localeCompare(b.activityDate))
+                        .forEach((a) => {
+                          const key = a.activityDate.split("T")[0];
+                          if (!grouped[key]) grouped[key] = [];
+                          grouped[key].push(a);
+                        });
+
+                      return Object.entries(grouped).map(([date, acts]) => (
+                        <div key={date} style={{ marginBottom: 24 }}>
+                          {/* Date header */}
+                          <div style={{
+                            display: "flex", alignItems: "center", gap: 10,
+                            marginBottom: 10
+                          }}>
+                            <div style={{
+                              width: 3, height: 20, borderRadius: 2,
+                              background: "linear-gradient(135deg, #4f8ef7 0%, #38b2ac 100%)"
+                            }} />
+                            <span style={{
+                              fontSize: 13, fontWeight: 700, color: "#4f8ef7",
+                              textTransform: "capitalize"
+                            }}>
+                              {new Date(date).toLocaleDateString("sr-Latn-RS", {
+                                weekday: "long", day: "numeric", month: "long", year: "numeric"
+                              })}
+                            </span>
+                            <span style={{
+                              background: "#ebf8ff", color: "#4f8ef7",
+                              borderRadius: 20, padding: "2px 10px", fontSize: 11, fontWeight: 600
+                            }}>
+                              {acts.length} {acts.length === 1 ? "aktivnost" : "aktivnosti"}
+                            </span>
+                          </div>
+
+                          {/* Activity cards for this date */}
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            {acts
+                              .sort((a, b) => (a.activityTime || "").localeCompare(b.activityTime || ""))
+                              .map((a) => (
+                                <ActivityCard key={a.id} a={a} />
+                              ))}
+                          </div>
+                        </div>
+                      ));
+                    })()
+                  )}
+                </div>
+              )}
+
+              {/* Edit Activity Modal */}
+              {editingActId && (
+                <div style={{
+                  position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+                  background: "rgba(0,0,0,0.5)", display: "flex",
+                  alignItems: "center", justifyContent: "center", zIndex: 1000
+                }}>
                   <div style={{
                     background: "white", borderRadius: 16, padding: 32,
                     width: "100%", maxWidth: 560, boxShadow: "0 20px 60px rgba(0,0,0,0.3)"
                   }}>
-                  <h3 style={{ marginBottom: 20, color: "#2d3748" }}>✏️ Uredi aktivnost</h3>
-                  <form onSubmit={async (e) => {
-                    e.preventDefault();
-                    const formToSend = {
-                      ...editActForm,
-                      activityTime: editActForm.activityTime ? editActForm.activityTime + ":00" : undefined
-                    };
-                    const updated = await travelService.updateActivity(editingActId, formToSend, token!);
-                    setActivities(activities.map((x) => x.id === editingActId ? updated : x));
-                    setEditingActId(null);
-                  }}>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-                      <input placeholder="Naziv *" value={editActForm.name} onChange={(e) => setEditActForm({ ...editActForm, name: e.target.value })} required style={inputStyle} />
-                      <input placeholder="Lokacija" value={editActForm.location} onChange={(e) => setEditActForm({ ...editActForm, location: e.target.value })} style={inputStyle} />
-                      <input type="date" value={editActForm.activityDate} onChange={(e) => setEditActForm({ ...editActForm, activityDate: e.target.value })} required style={inputStyle} />
-                      <input type="time" value={editActForm.activityTime} onChange={(e) => setEditActForm({ ...editActForm, activityTime: e.target.value })} style={inputStyle} />
-                      <input type="number" placeholder="Procijenjeni trošak (€)" value={editActForm.estimatedCost || ""} onChange={(e) => setEditActForm({ ...editActForm, estimatedCost: Number(e.target.value) })} min={0} style={inputStyle} />
-                      <select value={editActForm.status} onChange={(e) => setEditActForm({ ...editActForm, status: e.target.value })} style={inputStyle}>
-                        <option value="planned">Planirano</option>
-                        <option value="reserved">Rezervisano</option>
-                        <option value="completed">Završeno</option>
-                        <option value="cancelled">Otkazano</option>
-                      </select>
-                      <textarea placeholder="Opis" value={editActForm.description} onChange={(e) => setEditActForm({ ...editActForm, description: e.target.value })} style={{ ...inputStyle, gridColumn: "1 / -1", resize: "vertical" }} rows={2} />
-                    </div>
-                    <div style={{ display: "flex", gap: 12 }}>
-                      <button type="submit" style={{
-                        flex: 1, background: "linear-gradient(135deg, #4f8ef7 0%, #38b2ac 100%)",
-                        color: "white", border: "none", borderRadius: 8,
-                        padding: "12px", fontSize: 15, fontWeight: 700, cursor: "pointer"
-                      }}>
-                        Sačuvaj
-                      </button>
-                      <button type="button" onClick={() => setEditingActId(null)} style={{
-                        padding: "12px 24px", background: "#edf2f7", color: "#4a5568",
-                        border: "none", borderRadius: 8, fontSize: 15, cursor: "pointer"
-                      }}>
-                    Otkaži
-                  </button>
+                    <h3 style={{ marginBottom: 20, color: "#2d3748" }}>✏️ Uredi aktivnost</h3>
+                    <form onSubmit={async (e) => {
+                      e.preventDefault();
+                      const formToSend = {
+                        ...editActForm,
+                        activityTime: editActForm.activityTime ? editActForm.activityTime + ":00" : undefined
+                      };
+                      const updated = await travelService.updateActivity(editingActId, formToSend, token!);
+                      setActivities(activities.map((x) => x.id === editingActId ? updated : x));
+                      setEditingActId(null);
+                    }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                        <input placeholder="Naziv *" value={editActForm.name} onChange={(e) => setEditActForm({ ...editActForm, name: e.target.value })} required style={inputStyle} />
+                        <input placeholder="Lokacija" value={editActForm.location} onChange={(e) => setEditActForm({ ...editActForm, location: e.target.value })} style={inputStyle} />
+                        <input type="date" value={editActForm.activityDate} onChange={(e) => setEditActForm({ ...editActForm, activityDate: e.target.value })} required style={inputStyle} />
+                        <input type="time" value={editActForm.activityTime} onChange={(e) => setEditActForm({ ...editActForm, activityTime: e.target.value })} style={inputStyle} />
+                        <input type="number" placeholder="Procijenjeni trošak (€)" value={editActForm.estimatedCost || ""} onChange={(e) => setEditActForm({ ...editActForm, estimatedCost: Number(e.target.value) })} min={0} style={inputStyle} />
+                        <select value={editActForm.status} onChange={(e) => setEditActForm({ ...editActForm, status: e.target.value })} style={inputStyle}>
+                          <option value="planned">Planirano</option>
+                          <option value="reserved">Rezervisano</option>
+                          <option value="completed">Završeno</option>
+                          <option value="cancelled">Otkazano</option>
+                        </select>
+                        <textarea placeholder="Opis" value={editActForm.description} onChange={(e) => setEditActForm({ ...editActForm, description: e.target.value })} style={{ ...inputStyle, gridColumn: "1 / -1", resize: "vertical" }} rows={2} />
+                      </div>
+                      <div style={{ display: "flex", gap: 12 }}>
+                        <button type="submit" style={{
+                          flex: 1, background: "linear-gradient(135deg, #4f8ef7 0%, #38b2ac 100%)",
+                          color: "white", border: "none", borderRadius: 8,
+                          padding: "12px", fontSize: 15, fontWeight: 700, cursor: "pointer"
+                        }}>
+                          Sačuvaj
+                        </button>
+                        <button type="button" onClick={() => setEditingActId(null)} style={{
+                          padding: "12px 24px", background: "#edf2f7", color: "#4a5568",
+                          border: "none", borderRadius: 8, fontSize: 15, cursor: "pointer"
+                        }}>
+                          Otkaži
+                        </button>
+                      </div>
+                    </form>
+                  </div>
                 </div>
-            </form>
-          </div>
-        </div>
-      )}
-        </div>
-      </div>
-      )}
+              )}
+            </div>
+          )}
 
-          {/* Checklist Tab */}
+          {/* ───────────── Checklist Tab ───────────── */}
           {activeTab === "checklist" && (
             <div>
               <div style={{
@@ -523,7 +786,7 @@ const TravelPlanDetailPage = () => {
             </div>
           )}
 
-          {/* Expenses Tab */}
+          {/* ───────────── Expenses Tab ───────────── */}
           {activeTab === "expenses" && (
             <div>
               <div style={{
@@ -547,8 +810,15 @@ const TravelPlanDetailPage = () => {
                       <option value="shopping">🛍️ Kupovina</option>
                       <option value="other">📦 Ostalo</option>
                     </select>
-                    <input type="number" placeholder="Iznos (€) *" value={expForm.amount} onChange={(e) => setExpForm({ ...expForm, amount: Number(e.target.value) })} required min={0} style={inputStyle} />
+                    <input type="number" placeholder="Iznos (€) *" value={expForm.amount || ""} onChange={(e) => setExpForm({ ...expForm, amount: Number(e.target.value) })} required min={0} style={inputStyle} />
                     <input type="date" value={expForm.expenseDate} onChange={(e) => setExpForm({ ...expForm, expenseDate: e.target.value })} required style={inputStyle} />
+                    <textarea
+                      placeholder="Opis troška"
+                      value={expForm.description}
+                      onChange={(e) => setExpForm({ ...expForm, description: e.target.value })}
+                      style={{ ...inputStyle, gridColumn: "1 / -1", resize: "vertical" }}
+                      rows={2}
+                    />
                   </div>
                   <button type="submit" style={{
                     background: "linear-gradient(135deg, #4f8ef7 0%, #38b2ac 100%)",
@@ -572,6 +842,9 @@ const TravelPlanDetailPage = () => {
                       <p style={{ fontSize: 13, color: "#718096" }}>
                         {exp.category} • {formatDate(exp.expenseDate)}
                       </p>
+                      {exp.description && (
+                        <p style={{ fontSize: 13, color: "#4a5568", marginTop: 4 }}>📝 {exp.description}</p>
+                      )}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                       <span style={{ fontSize: 18, fontWeight: 700, color: "#276749" }}>{exp.amount} €</span>

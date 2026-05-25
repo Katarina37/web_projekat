@@ -31,7 +31,7 @@ namespace UserService.Services
 
             var user = mapper.Map<User>(dto);
             user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password);
-            user.Role = "User";
+            user.Role = "user";
             user.CreatedAt = DateTime.UtcNow;
 
             context.Users.Add(user);
