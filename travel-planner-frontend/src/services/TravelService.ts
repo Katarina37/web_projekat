@@ -100,8 +100,59 @@ export const travelService = {
         return response.data;
     },
 
-    getByToken: async (token: string): Promise<TravelPlan> => {
+    /*getByToken: async (token: string): Promise<TravelPlan> => {
         const response = await axios.get(`${BASE_URL}/api/travel-plans/shared/${token}`);
         return response.data;
+    },*/
+    getByToken: async (token: string): Promise<{ plan: TravelPlan; accessType: string }> => {
+        const response = await axios.get(`${BASE_URL}/api/travel-plans/shared/${token}`);
+        return response.data;
+    },
+
+    getDestinationsByToken: async (token: string): Promise<Destination[]> => {
+        const response = await axios.get(`${BASE_URL}/api/travel-plans/shared/${token}/destinations`);
+        return response.data;
+    },
+
+    getActivitiesByToken: async (token: string): Promise<Activity[]> => {
+        const response = await axios.get(`${BASE_URL}/api/travel-plans/shared/${token}/activities`);
+        return response.data;   
+    },
+
+    getChecklistByToken: async (token: string): Promise<ChecklistItem[]> => {
+        const response = await axios.get(`${BASE_URL}/api/travel-plans/shared/${token}/checklist`);
+        return response.data;
+    },
+
+    createDestinationShared: async (shareToken: string, dto: CreateDestinationDto): Promise<Destination> => {
+         const response = await axios.post(`${BASE_URL}/api/travel-plans/shared/${shareToken}/destinations`, dto);
+        return response.data;
+    },
+
+    deleteDestinationShared: async (shareToken: string, id: number): Promise<void> => {
+        await axios.delete(`${BASE_URL}/api/travel-plans/shared/${shareToken}/destinations/${id}`);
+    },
+
+    createActivityShared: async (shareToken: string, dto: CreateActivityDto): Promise<Activity> => {
+        const response = await axios.post(`${BASE_URL}/api/travel-plans/shared/${shareToken}/activities`, dto);
+        return response.data;
+    },
+
+    deleteActivityShared: async (shareToken: string, id: number): Promise<void> => {
+        await axios.delete(`${BASE_URL}/api/travel-plans/shared/${shareToken}/activities/${id}`);
+    },
+
+    createChecklistItemShared: async (shareToken: string, dto: CreateChecklistItemDto): Promise<ChecklistItem> => {
+        const response = await axios.post(`${BASE_URL}/api/travel-plans/shared/${shareToken}/checklist`, dto);
+        return response.data;
+    },
+
+    toggleChecklistItemShared: async (shareToken: string, id: number): Promise<ChecklistItem> => {
+        const response = await axios.patch(`${BASE_URL}/api/travel-plans/shared/${shareToken}/checklist/${id}/toggle`, {});
+        return response.data;
+    },
+
+    deleteChecklistItemShared: async (shareToken: string, id: number): Promise<void> => {
+        await axios.delete(`${BASE_URL}/api/travel-plans/shared/${shareToken}/checklist/${id}`);
     },
 };

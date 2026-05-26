@@ -1,8 +1,10 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using TravelService.DTOs;
 using TravelService.Services;
+using TravelService.Data;
 
 namespace TravelService.Controllers
 {
@@ -12,10 +14,12 @@ namespace TravelService.Controllers
     public class TravelPlansController : ControllerBase
     {
         private readonly ITravelService travelService;
+        private readonly AppDbContext context;
 
-        public TravelPlansController(ITravelService _travelService)
+        public TravelPlansController(ITravelService _travelService, AppDbContext _context)
         {
             travelService = _travelService;
+            context = _context; 
         }
 
         private int GetUserById() =>
@@ -174,9 +178,140 @@ namespace TravelService.Controllers
         [AllowAnonymous]
         public async Task<IActionResult> GetByToken(string token)
         {
-            var plan = await travelService.GetByToken(token);
+            var plan = await travelService.GetByTokenWithAccess(token);
             if (plan == null) return NotFound(new { message = "Plan nije pronađen ili je token istekao." });
             return Ok(plan);
+        }
+
+        [HttpGet("shared/{token}/destinations")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetDestinationsByToken(string token)
+        {
+            var sharedPlan = await context.SharedPlans
+                .FirstOrDefaultAsync(s => s.Token == token &&
+                    (s.ExpiresAt == null || s.ExpiresAt > DateTime.UtcNow));
+            if (sharedPlan == null) return NotFound();
+            var destinations = await travelService.GetDestinations(sharedPlan.TravelPlanId);
+            return Ok(destinations);
+        }
+
+        [HttpGet("shared/{token}/activities")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetActivitiesByToken(string token)
+        {
+            var sharedPlan = await context.SharedPlans
+                .FirstOrDefaultAsync(s => s.Token == token &&
+                    (s.ExpiresAt == null || s.ExpiresAt > DateTime.UtcNow));
+            if (sharedPlan == null) return NotFound();
+            var activities = await travelService.GetActivities(sharedPlan.TravelPlanId);
+            return Ok(activities);
+        }
+
+        [HttpGet("shared/{token}/checklist")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GetChecklistByToken(string token)
+        {
+            var sharedPlan = await context.SharedPlans
+                .FirstOrDefaultAsync(s => s.Token == token &&
+                    (s.ExpiresAt == null || s.ExpiresAt > DateTime.UtcNow));
+            if (sharedPlan == null) return NotFound();
+            var items = await travelService.GetChecklistItems(sharedPlan.TravelPlanId);
+            return Ok(items);
+        }
+
+        [HttpPost("shared/{token}/destinations")]
+        [AllowAnonymous]
+        public async Task<IActionResult> CreateDestinationByToken(string token, [FromBody] CreateDestinationDto dto)
+        {
+            var sharedPlan = await context.SharedPlans
+                .FirstOrDefaultAsync(s => s.Token == token &&
+                    s.AccessType == "edit" &&
+                    (s.ExpiresAt == null || s.ExpiresAt > DateTime.UtcNow));
+            if (sharedPlan == null) return Forbid();
+            var destination = await travelService.CreateDestination(sharedPlan.TravelPlanId, dto);
+            return Ok(destination);
+        }
+
+        [HttpDelete("shared/{token}/destinations/{id}")]
+        [AllowAnonymous]
+        public async Task<IActionResult> DeleteDestinationByToken(string token, int id)
+        {
+            var sharedPlan = await context.SharedPlans
+                .FirstOrDefaultAsync(s => s.Token == token &&
+                    s.AccessType == "edit" &&
+                    (s.ExpiresAt == null || s.ExpiresAt > DateTime.UtcNow));
+            if (sharedPlan == null) return Forbid();
+            var result = await travelService.DeleteDestination(id);
+            if (!result) return NotFound();
+            return NoContent();
+        }
+
+        [HttpPost("shared/{token}/activities")]
+        [AllowAnonymous]
+        public async Task<IActionResult> CreateActivityByToken(string token, [FromBody] CreateActivityDto dto)
+        {
+            var sharedPlan = await context.SharedPlans
+                .FirstOrDefaultAsync(s => s.Token == token &&
+                    s.AccessType == "edit" &&
+                    (s.ExpiresAt == null || s.ExpiresAt > DateTime.UtcNow));
+            if (sharedPlan == null) return Forbid();
+            var activity = await travelService.CreateActivity(sharedPlan.TravelPlanId, dto);
+            return Ok(activity);
+        }
+
+        [HttpDelete("shared/{token}/activities/{id}")]
+        [AllowAnonymous]
+        public async Task<IActionResult> DeleteActivityByToken(string token, int id)
+        {
+            var sharedPlan = await context.SharedPlans
+                .FirstOrDefaultAsync(s => s.Token == token &&
+                    s.AccessType == "edit" &&
+                    (s.ExpiresAt == null || s.ExpiresAt > DateTime.UtcNow));
+            if (sharedPlan == null) return Forbid();
+            var result = await travelService.DeleteActivity(id);
+            if (!result) return NotFound();
+            return NoContent();
+        }
+
+        [HttpPost("shared/{token}/checklist")]
+        [AllowAnonymous]
+        public async Task<IActionResult> CreateChecklistByToken(string token, [FromBody] CreateChecklistItemDto dto)
+        {
+            var sharedPlan = await context.SharedPlans
+                .FirstOrDefaultAsync(s => s.Token == token &&
+                    s.AccessType == "edit" &&
+                    (s.ExpiresAt == null || s.ExpiresAt > DateTime.UtcNow));
+            if (sharedPlan == null) return Forbid();
+            var item = await travelService.CreateChecklistItem(sharedPlan.TravelPlanId, dto);
+            return Ok(item);
+        }
+
+        [HttpPatch("shared/{token}/checklist/{id}/toggle")]
+        [AllowAnonymous]
+        public async Task<IActionResult> ToggleChecklistByToken(string token, int id)
+        {
+            var sharedPlan = await context.SharedPlans
+                .FirstOrDefaultAsync(s => s.Token == token &&
+                    s.AccessType == "edit" &&
+                    (s.ExpiresAt == null || s.ExpiresAt > DateTime.UtcNow));
+            if (sharedPlan == null) return Forbid();
+            var item = await travelService.ToggleChecklistItem(id);
+            if (item == null) return NotFound();
+            return Ok(item);
+        }
+
+        [HttpDelete("shared/{token}/checklist/{id}")]
+        [AllowAnonymous]
+        public async Task<IActionResult> DeleteChecklistByToken(string token, int id)
+        {
+            var sharedPlan = await context.SharedPlans
+                .FirstOrDefaultAsync(s => s.Token == token &&
+                    s.AccessType == "edit" &&
+                    (s.ExpiresAt == null || s.ExpiresAt > DateTime.UtcNow));
+            if (sharedPlan == null) return Forbid();
+            var result = await travelService.DeleteChecklistItem(id);
+            if (!result) return NotFound();
+            return NoContent();
         }
     }
 }

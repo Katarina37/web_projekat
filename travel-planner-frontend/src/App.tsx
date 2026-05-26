@@ -6,6 +6,8 @@ import RegisterPage from "./pages/RegisterPage";
 import DashboardPage from "./pages/DashboardPage";
 import TravelPlanFormPage from "./pages/TravelPlanFormPage";
 import TravelPlanDetailPage from "./pages/TravelPlanDetailPage";
+import AdminPage from "./pages/AdminPage";
+import SharedPlanPage from "./pages/SharedPlanPage";
 
 const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated } = useAuth();
@@ -49,6 +51,12 @@ const App = () => {
             </PrivateRoute>
           } />
           <Route path="*" element={<Navigate to="/login" />} />
+          <Route path="/admin" element={
+            <PrivateRoute>
+              <Layout><AdminPage /></Layout>
+            </PrivateRoute>
+          } />
+          <Route path="/shared/:token" element={<SharedPlanPage />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

@@ -88,3 +88,16 @@ CREATE TABLE SharedPlans (
     CONSTRAINT FK_SharedPlans_TravelPlans FOREIGN KEY (TravelPlanId) REFERENCES TravelPlans(Id) ON DELETE CASCADE,
     CONSTRAINT CHK_AccessType CHECK (AccessType IN ('view', 'edit'))
 );
+
+-- ovo samo kad se dodaje admin, inace ne pokretati
+USE TravelPlannerDB;
+
+UPDATE Users SET Role = 'admin' WHERE Email = 'admin@email.com';
+
+USE TravelPlannerDB;
+SELECT * FROM Users;
+
+USE TravelPlannerDB;
+UPDATE Users SET Role = 'admin' WHERE Email = 'admin@gmail.com';
+
+SELECT * FROM Users;

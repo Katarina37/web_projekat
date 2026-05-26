@@ -33,5 +33,7 @@ namespace TravelService.Services
         Task<SharedPlanDto> CreateSharedPlan(int travelPlanId, CreateSharedPlanDto dto);
         Task<TravelPlanDto?> GetByToken(string token);
 
+        Task<SharedPlanResponseDto?> GetByTokenWithAccess(string token);
+
     }
 }

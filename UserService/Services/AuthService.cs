@@ -72,6 +72,15 @@ namespace UserService.Services
             return true;
         }
 
+        public async Task<UserDTO?> MakeAdmin(int userId)
+        {
+            var user = await context.Users.FindAsync(userId);
+            if (user == null) return null;
+            user.Role = "admin";
+            await context.SaveChangesAsync();
+            return mapper.Map<UserDTO>(user);
+        }
+
         private string GenerateToken(User user)
         {
             var jwtSettings = configuration.GetSection("JwtSettings");

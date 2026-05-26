@@ -9,6 +9,7 @@ import type { Activity, CreateActivityDto } from "../models/Activity";
 import type { ChecklistItem } from "../models/ChecklistItem";
 import type { Expense, CreateExpenseDto } from "../models/Expense";
 import { generateTravelPlanPdf } from "../services/PdfService";
+import {QRCodeSVG} from "qrcode.react";
 
 const TravelPlanDetailPage = () => {
   const { id } = useParams();
@@ -40,6 +41,10 @@ const TravelPlanDetailPage = () => {
   const [editActForm, setEditActForm] = useState<CreateActivityDto>({
     name: "", activityDate: "", activityTime: "", location: "", description: "", estimatedCost: 0, status: "planned"
   });
+
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareToken, setShareToken] = useState<string | null>(null);
+  const [shareAccessType, setShareAccessType] = useState("view");
 
   // Calendar view state
   const [activityView, setActivityView] = useState<"list" | "calendar">("list");
@@ -180,7 +185,7 @@ const TravelPlanDetailPage = () => {
           <div style={{
             background: "linear-gradient(135deg, #4f8ef7 0%, #38b2ac 100%)",
             borderRadius: 16, padding: 32, marginBottom: 24, color: "white"
-          }}>
+            }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
                 <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 8 }}>{plan.title}</h1>
@@ -198,6 +203,16 @@ const TravelPlanDetailPage = () => {
                 }}
               >
                 ✏️ Uredi
+              </button>
+              <button
+                onClick={() => setShowShareModal(true)}
+                style={{
+                  background: "rgba(255,255,255,0.2)", border: "1px solid rgba(255,255,255,0.4)",
+                  color: "white", padding: "10px 20px", borderRadius: 8,
+                  fontSize: 14, fontWeight: 600, cursor: "pointer", marginRight: 8
+                }}
+              >
+                 Podijeli
               </button>
               <button
                 onClick={() => generateTravelPlanPdf(plan, destinations, activities, checklistItems, expenses)}
@@ -235,7 +250,7 @@ const TravelPlanDetailPage = () => {
             display: "flex", gap: 4, marginBottom: 24,
             background: "white", borderRadius: 12, padding: 4,
             boxShadow: "0 2px 12px rgba(0,0,0,0.06)"
-          }}>
+            }}>
             {tabs.map((tab) => (
               <button
                 key={tab.key}
@@ -864,6 +879,113 @@ const TravelPlanDetailPage = () => {
             </div>
           )}
         </>
+      )}
+      
+
+    {/**komentar */}
+      {showShareModal && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(0,0,0,0.5)", display: "flex",
+          alignItems: "center", justifyContent: "center", zIndex: 1000
+        }}>
+          <div style={{
+            background: "white", borderRadius: 16, padding: 32,
+            width: "100%", maxWidth: 480, boxShadow: "0 20px 60px rgba(0,0,0,0.3)"
+          }}>
+            <h3 style={{ marginBottom: 20, color: "#2d3748" }}> Podijeli plan putovanja</h3>
+
+            {!shareToken ? (
+              <>
+                <p style={{ color: "#718096", marginBottom: 16 }}>Izaberite tip pristupa:</p>
+                <div style={{ display: "flex", gap: 12, marginBottom: 24 }}>
+                  <button
+                    onClick={() => setShareAccessType("view")}
+                    style={{
+                      flex: 1, padding: "12px",
+                      background: shareAccessType === "view"
+                        ? "linear-gradient(135deg, #4f8ef7 0%, #38b2ac 100%)"
+                        : "#edf2f7",
+                      color: shareAccessType === "view" ? "white" : "#4a5568",
+                      border: "none", borderRadius: 8, fontSize: 14,
+                      fontWeight: 600, cursor: "pointer"
+                    }}
+                  >
+                    Samo pregled
+                  </button>
+                  <button
+                    onClick={() => setShareAccessType("edit")}
+                    style={{
+                      flex: 1, padding: "12px",
+                      background: shareAccessType === "edit"
+                        ? "linear-gradient(135deg, #4f8ef7 0%, #38b2ac 100%)"
+                        : "#edf2f7",
+                      color: shareAccessType === "edit" ? "white" : "#4a5568",
+                      border: "none", borderRadius: 8, fontSize: 14,
+                      fontWeight: 600, cursor: "pointer"
+                    }}
+                  >
+                     Može uređivati
+                  </button>
+                </div>
+                <button
+                  onClick={async () => {
+                    const shared = await travelService.createSharedPlan(Number(id), shareAccessType, token!);
+                    setShareToken(shared.token);
+                  }}
+                  style={{
+                    width: "100%", padding: "14px",
+                    background: "linear-gradient(135deg, #4f8ef7 0%, #38b2ac 100%)",
+                    color: "white", border: "none", borderRadius: 8,
+                    fontSize: 16, fontWeight: 700, cursor: "pointer"
+                  }}
+                >
+                  Generiši link i QR kod
+                </button>
+              </>
+            ) : (
+              <>
+                <div style={{ textAlign: "center", marginBottom: 24 }}>
+                  <QRCodeSVG
+                    value={`${window.location.origin}/shared/${shareToken}`}
+                    size={200}
+                  />
+                </div>
+                <div style={{
+                  background: "#f0f4f8", borderRadius: 8, padding: "12px 16px",
+                  marginBottom: 16, wordBreak: "break-all", fontSize: 13, color: "#4a5568"
+                }}>
+                  {`${window.location.origin}/shared/${shareToken}`}
+                </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/shared/${shareToken}`);
+                    alert("Link kopiran!");
+                  }}
+                  style={{
+                    width: "100%", padding: "12px",
+                    background: "#edf2f7", color: "#4a5568",
+                    border: "none", borderRadius: 8, fontSize: 14,
+                    fontWeight: 600, cursor: "pointer", marginBottom: 8
+                  }}
+                >
+                   Kopiraj link
+                </button>
+              </>
+            )}
+
+            <button
+              onClick={() => { setShowShareModal(false); setShareToken(null); }}
+              style={{
+                width: "100%", padding: "12px", background: "#fff5f5",
+                color: "#c53030", border: "none", borderRadius: 8,
+                fontSize: 14, fontWeight: 600, cursor: "pointer", marginTop: 8
+              }}
+            >
+              Zatvori
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

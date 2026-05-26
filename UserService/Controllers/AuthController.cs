@@ -70,5 +70,14 @@ namespace UserService.Controllers
             return NoContent();
         }
 
+        [HttpPatch("{id}/make-admin")]
+        [Authorize(Roles = "admin")]
+        public async Task<IActionResult> MakeAdmin(int id)
+        {
+            var result = await authService.MakeAdmin(id);
+            if (result == null) return NotFound(new { message = "Korisnik nije pronađen." });
+            return Ok(result);
+        }
+
     }
 }

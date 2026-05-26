@@ -227,7 +227,25 @@ namespace TravelService.Services
                 .FirstOrDefaultAsync(s => s.Token == token &&
                 (s.ExpiresAt == null || s.ExpiresAt > DateTime.UtcNow));
 
-            return sharedPlan == null ? null : _mapper.Map<TravelPlanDto>(sharedPlan.TravelPlan);
+            if(sharedPlan == null) return null;
+
+            return _mapper.Map<TravelPlanDto>(sharedPlan.TravelPlan);
+        }
+
+        public async Task<SharedPlanResponseDto?> GetByTokenWithAccess(string token)
+        {
+            var sharedPlan = await _context.SharedPlans
+                .Include(s => s.TravelPlan)
+                .FirstOrDefaultAsync(s => s.Token == token &&
+                    (s.ExpiresAt == null || s.ExpiresAt > DateTime.UtcNow));
+
+            if (sharedPlan == null) return null;
+
+            return new SharedPlanResponseDto
+            {
+                Plan = _mapper.Map<TravelPlanDto>(sharedPlan.TravelPlan),
+                AccessType = sharedPlan.AccessType
+            };
         }
     }
 }

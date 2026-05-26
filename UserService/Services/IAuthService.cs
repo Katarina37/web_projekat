@@ -9,5 +9,6 @@ namespace UserService.Services
         Task<IEnumerable<UserDTO>> GetAllUsers();
         Task<UserDTO?> GetUserById(int id);
         Task<bool> DeleteUser(int id);
+        Task<UserDTO?> MakeAdmin(int userId);
     }
 }

@@ -49,6 +49,19 @@ const Navbar = () => {
           </button>
         </div>
       )}
+      {isAuthenticated && user?.role === "admin" && (
+        <button
+          onClick={() => navigate("/admin")}
+          style={{
+            background: "rgba(255,255,255,0.2)",
+            border: "1px solid rgba(255,255,255,0.4)",
+            color: "white", padding: "8px 16px", borderRadius: 8,
+            cursor: "pointer", fontSize: 14, fontWeight: 600,
+          }}
+        >
+          Admin panel
+        </button>
+      )}
     </nav>
   );
 };
